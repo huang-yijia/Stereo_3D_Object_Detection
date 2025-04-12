@@ -1,16 +1,6 @@
-# YOLO-3D
+# Stereo 3D Object Detection
 
-A real-time 3D object detection system that combines YOLOv11 for object detection with Depth Anything v2 for depth estimation to create pseudo-3D bounding boxes and bird's eye view visualization.
-
-## Features
-
-- Real-time object detection using YOLOv11
-- Depth estimation using Depth Anything v2
-- 3D bounding box visualization
-- Bird's Eye View (BEV) visualization
-- Object tracking capabilities
-- Support for video files and webcam input
-- Adjustable model sizes for performance/accuracy tradeoffs
+This project presents a modular pipeline for 3D Object Detection, integrating object detection, depth estimation, and 3D bounding box projection. The object detection module supports both a YOLOv11-based approach inspired by Faster-RCNN and a transformer-based approach using DETR. For depth estimation, it includes both Depth Anything v2 for monocular depth estimation and a stereo camera-based depth estimation algorithm that leverages binocular disparity to recover scene depth more accurately. The final 3D bounding box module combines 2D detection results with depth information to generate spatially aware 3D boxes, complete with Bird’s Eye View (BEV) visualization and pseudo-3D overlays. This pipeline is designed to be flexible and extensible for future research and experimentation in 3D perception.
 
 ## Requirements
 
@@ -24,8 +14,8 @@ A real-time 3D object detection system that combines YOLOv11 for object detectio
 
 1. Clone this repository:
    ```
-   git clone https://github.com/niconielsen32/YOLO-3D.git
-   cd YOLO-3D
+   git clone https://github.com/huang-yijia/Stereo_3D_Object_Detection.git
+   cd Stereo_3D_object_Detection
    ```
 
 2. Install dependencies:
@@ -64,30 +54,3 @@ You can modify the following parameters in `run.py`:
   - `enable_tracking`: Enable object tracking
   - `enable_bev`: Enable Bird's Eye View visualization
   - `enable_pseudo_3d`: Enable 3D visualization
-
-## Project Structure
-
-```
-YOLO-3D/
-
-│── run.py                  # Main script
-│── detection_model.py      # YOLOv11 object detection
-│── depth_model.py          # Depth Anything v2 depth estimation
-│── bbox3d_utils.py         # 3D bounding box utilities
-│── load_camera_params.py   # Camera parameter utilities
-├── requirements.txt            # Project dependencies
-└── README.md                   # This file
-```
-
-## How It Works
-
-1. **Object Detection**: YOLOv11 detects objects in the frame and provides 2D bounding boxes
-2. **Depth Estimation**: Depth Anything v2 generates a depth map for the entire frame
-3. **3D Box Estimation**: Combines 2D boxes with depth information to create 3D boxes
-4. **Visualization**: Renders 3D boxes and bird's eye view for better spatial understanding
-
-
-## Acknowledgments
-
-- YOLOv11 by Ultralytics
-- Depth Anything v2 by Microsoft 
