@@ -85,7 +85,7 @@ class DETRDetector:
         ]
 
 
-class ObjectDetector:
+class YOLOv11Detector:
     """
     Object detection using YOLOv11 from Ultralytics
     """

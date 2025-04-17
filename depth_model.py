@@ -1,13 +1,12 @@
 import os
 import torch
-import torch.nn as nn
-import torch.nn.functional as F
 import numpy as np
 import cv2
 from transformers import pipeline
 from PIL import Image
 
-class DepthEstimator:
+
+class DepthAnythingEstimator:
     """
     Depth estimation using Depth Anything v2
     """

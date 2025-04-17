@@ -6,8 +6,6 @@ This project presents a modular pipeline for 3D Object Detection, integrating ob
 
 - Python 3.8+
 - PyTorch 2.0+
-- OpenCV
-- NumPy
 - Other dependencies listed in `requirements.txt`
 
 ## Installation
@@ -27,30 +25,14 @@ This project presents a modular pipeline for 3D Object Detection, integrating ob
 
 ## Usage
 
-Run the main script:
+Run for main script:
 
 ```bash
-python run.py
+python3 run.py
 ```
 
-### Configuration Options
+Run for stereo 3D object detection:
 
-You can modify the following parameters in `run.py`:
-
-- **Input/Output**:
-  - `source`: Path to input video file or webcam index (0 for default camera)
-  - `output_path`: Path to output video file
-
-- **Model Settings**:
-  - `yolo_model_size`: YOLOv11 model size ("nano", "small", "medium", "large", "extra")
-  - `depth_model_size`: Depth Anything v2 model size ("small", "base", "large")
-
-- **Detection Settings**:
-  - `conf_threshold`: Confidence threshold for object detection
-  - `iou_threshold`: IoU threshold for NMS
-  - `classes`: Filter by class, e.g., [0, 1, 2] for specific classes, None for all classes
-
-- **Feature Toggles**:
-  - `enable_tracking`: Enable object tracking
-  - `enable_bev`: Enable Bird's Eye View visualization
-  - `enable_pseudo_3d`: Enable 3D visualization
+```bash
+python3 run.py --camera stereo --data_path /path/to/your/dataset/folder
+```
