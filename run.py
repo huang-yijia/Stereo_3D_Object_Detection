@@ -6,14 +6,16 @@ import numpy as np
 import argparse
 
 # Import our modules
-from detection_model import YOLOv11Detector
-from depth_model import DepthAnythingEstimator
+from detection_model import YOLOv11Detector, DETRDetector
+from depth_model import DepthAnythingEstimator, OpenCVStereoEstimator
 from bbox3d_utils import BBox3DEstimator
 
 def parse_args():
     parser = argparse.ArgumentParser(description="3D Object Detection Pipeline")
     parser.add_argument('--camera', type=str, choices=['single', 'stereo'], default='single',
                         help='Camera type: "single" or "stereo"')
+    parser.add_argument('--detector', type=str, choices=['YOLOv11', 'DETR'], default='YOLOv11',
+                        help='2D object detector models: "YOLOv11" or "DETR"')
     parser.add_argument('--data_path', type=str, default='',
                         help='Path to your dataset (required if camera=stereo)')
     return parser.parse_args()
@@ -31,25 +33,35 @@ def main():
     enable_tracking = True  # Enable object tracking
     
     print(f"Using device: {device}")
-    
-    # Initialize models
     print("Initializing models...")
-    detector = YOLOv11Detector(
-        model_size="nano",
-        conf_thres=conf_threshold,
-        iou_thres=iou_threshold,
-        classes=classes,
-        device=device
-    )
 
-    depth_estimator = DepthAnythingEstimator(
-        model_size="small",
-        device=device
-    )
+    # Initialize 2D object detector models
+    if args.detector == 'YOLOv11':
+        detector = YOLOv11Detector(
+            model_size="nano",
+            conf_thres=conf_threshold,
+            iou_thres=iou_threshold,
+            classes=classes,
+            device=device
+        )
+    else:
+        detector = DETRDetector(
+            device=device
+        )
     
+    # Initialize depth estimator models
+    if args.camera == 'single':
+        depth_estimator = DepthAnythingEstimator(
+            model_size="small",
+            device=device
+        )
+    else:
+        depth_estimator = OpenCVStereoEstimator()
+    
+    # Initialize 3D bounding box estimator models
     bbox3d_estimator = BBox3DEstimator()
 
-    # Initialize image input
+    # Initialize image acquisition methods
     if args.camera == 'single':
         cap = cv2.VideoCapture(0)
         width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
@@ -109,7 +121,6 @@ def main():
         
         # Step 1: Object Detection
         detection_frame, detections = detector.detect(detection_frame, track=enable_tracking)
-
         
         # Step 2: Depth Estimation
         if args.camera == 'single':

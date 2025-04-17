@@ -5,6 +5,70 @@ import cv2
 from transformers import pipeline
 from PIL import Image
 
+class OpenCVStereoEstimator:
+    def __init__(self, focal_length=721.5377, baseline=0.54):
+        self.stereo = cv2.StereoSGBM_create(
+            minDisparity=0,
+            numDisparities=128,
+            blockSize=5,
+            P1=8 * 3 * 5 ** 2,
+            P2=32 * 3 * 5 ** 2,
+            mode=cv2.STEREO_SGBM_MODE_SGBM_3WAY
+        )
+        self.focal_length = focal_length
+        self.baseline = baseline
+        self.depth_raw = None
+
+    def estimate_depth(self, left_image, right_image):
+        left_gray = cv2.cvtColor(left_image, cv2.COLOR_BGR2GRAY)
+        right_gray = cv2.cvtColor(right_image, cv2.COLOR_BGR2GRAY)
+
+        disparity = self.stereo.compute(left_gray, right_gray).astype(np.float32) / 16.0
+
+        with np.errstate(divide='ignore'):
+            depth = (self.focal_length * self.baseline) / disparity
+            depth[disparity <= 0] = 0
+
+        self.depth_raw = depth
+
+        depth_norm = np.copy(depth)
+        depth_norm[depth_norm == np.inf] = 0
+        max_depth = np.percentile(depth_norm[depth_norm > 0], 95)
+        depth_norm = np.clip(depth_norm / max_depth, 0, 1)
+
+        return depth_norm
+
+    def colorize_depth(self, depth_map, cmap=cv2.COLORMAP_INFERNO):
+        depth_uint8 = (depth_map * 255).astype(np.uint8)
+        return cv2.applyColorMap(depth_uint8, cmap)
+
+    def get_depth_at_point(self, depth_map, x, y):
+        if 0 <= y < depth_map.shape[0] and 0 <= x < depth_map.shape[1]:
+            return float(depth_map[y, x])
+        return 0.0
+
+    def get_depth_in_region(self, depth_map, bbox, method='median'):
+        if depth_map is None:
+            return 0.0
+
+        x1, y1, x2, y2 = [int(coord) for coord in bbox]
+        x1 = max(0, x1)
+        y1 = max(0, y1)
+        x2 = min(depth_map.shape[1] - 1, x2)
+        y2 = min(depth_map.shape[0] - 1, y2)
+
+        region = depth_map[y1:y2, x1:x2]
+        if region.size == 0:
+            return 0.0
+
+        if method == 'median':
+            return float(np.median(region))
+        elif method == 'mean':
+            return float(np.mean(region))
+        elif method == 'min':
+            return float(np.min(region))
+        else:
+            return float(np.median(region))
 
 class DepthAnythingEstimator:
     """
