@@ -1,6 +1,6 @@
 # Stereo 3D Object Detection
 
-This project presents a modular pipeline for 3D Object Detection, integrating object detection, depth estimation, and 3D bounding box projection. The object detection module supports both a YOLOv11-based approach inspired by Faster-RCNN and a transformer-based approach using DETR. For depth estimation, it includes both Depth Anything v2 for single camera depth estimation and an OpenCV-SGBM for stereo camera depth estimation. The final 3D bounding box module combines 2D detection results with depth information to generate spatially aware 3D boxes. This pipeline is designed to be flexible and extensible for future research and experimentation in 3D perception.
+This project presents a modular pipeline for 3D Object Detection, integrating object detection, depth estimation, and 3D bounding box projection. The object detection module supports both a YOLOv11-based approach inspired by Faster-RCNN and a transformer-based approach using DETR. For depth estimation, it includes both Depth Anything v2 for single camera depth estimation and an OpenCV-SGBM and self-trained transformer depth estimation for stereo camera depth estimation. The final 3D bounding box module combines 2D detection results with depth information to generate spatially aware 3D boxes. This pipeline is designed to be flexible and extensible for future research and experimentation in 3D perception.
 
 ## Requirements
 
