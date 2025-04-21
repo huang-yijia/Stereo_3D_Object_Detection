@@ -5,6 +5,53 @@ import cv2
 from transformers import pipeline
 from PIL import Image
 
+from transformer_depth_model import TransformerDepthEstimator 
+
+class TrainedStereoTransformer:
+    def __init__(self, weights_path, device='cpu'):
+        self.device = device
+        self.model = TransformerDepthEstimator().to(self.device)
+        self.model.load_state_dict(torch.load(weights_path, map_location=self.device))
+        self.model.eval()
+        self.depth_raw = None
+
+    def estimate_depth(self, left, right):
+        with torch.no_grad():
+            left_rgb = cv2.cvtColor(left, cv2.COLOR_BGR2RGB)
+            right_rgb = cv2.cvtColor(right, cv2.COLOR_BGR2RGB)
+
+            left_tensor = torch.tensor(left_rgb).permute(2, 0, 1).unsqueeze(0).float() / 255.
+            right_tensor = torch.tensor(right_rgb).permute(2, 0, 1).unsqueeze(0).float() / 255.
+
+            left_tensor = torch.nn.functional.interpolate(left_tensor, size=(256, 512))
+            right_tensor = torch.nn.functional.interpolate(right_tensor, size=(256, 512))
+
+            pred = self.model(left_tensor.to(self.device), right_tensor.to(self.device))
+            depth = pred.squeeze().cpu().numpy()
+
+            self.depth_raw = depth
+            depth_norm = depth / np.percentile(depth[depth > 0], 95)
+            return np.clip(depth_norm, 0, 1)
+
+    def colorize_depth(self, depth_map, cmap=cv2.COLORMAP_INFERNO):
+        depth_uint8 = (depth_map * 255).astype(np.uint8)
+        return cv2.applyColorMap(depth_uint8, cmap)
+
+    def get_depth_at_point(self, depth_map, x, y):
+        if depth_map is None:
+            return 0.0
+        return float(depth_map[y, x])
+
+    def get_depth_in_region(self, depth_map, bbox, method='median'):
+        if depth_map is None:
+            return 0.0
+        x1, y1, x2, y2 = map(int, bbox)
+        region = depth_map[y1:y2, x1:x2]
+        if region.size == 0: return 0.0
+        if method == 'mean': return float(np.mean(region))
+        if method == 'min': return float(np.min(region))
+        return float(np.median(region))
+
 class OpenCVStereoEstimator:
     def __init__(self, focal_length=721.5377, baseline=0.54):
         self.stereo = cv2.StereoSGBM_create(

@@ -34,5 +34,5 @@ python3 run.py
 Custom run the main script:
 
 ```bash
-python3 run.py --camera [single|stereo] --detector [YOLOv11|DETR] --data_path /path/to/your/dataset/folder
+python3 run.py --camera [single|stereo] --detector [YOLOv11|DETR] --depth [depthanything|opencvsgbm|transformer] --data_path /path/to/your/dataset/folder
 ```

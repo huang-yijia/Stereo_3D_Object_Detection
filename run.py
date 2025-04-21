@@ -1,22 +1,23 @@
 #!/usr/bin/env python3
 import os
-import time
 import cv2
-import numpy as np
 import argparse
 
 # Import our modules
 from detection_model import YOLOv11Detector, DETRDetector
-from depth_model import DepthAnythingEstimator, OpenCVStereoEstimator
+from depth_model import DepthAnythingEstimator, OpenCVStereoEstimator, TrainedStereoTransformer
 from bbox3d_utils import BBox3DEstimator
 
 def parse_args():
     parser = argparse.ArgumentParser(description="3D Object Detection Pipeline")
     parser.add_argument('--camera', type=str, choices=['single', 'stereo'], default='single',
                         help='Camera type: "single" or "stereo"')
-    parser.add_argument('--detector', type=str, choices=['YOLOv11', 'DETR'], default='YOLOv11',
-                        help='2D object detector models: "YOLOv11" or "DETR"')
-    parser.add_argument('--data_path', type=str, default='',
+    parser.add_argument('--detector', type=str, choices=['yolov11', 'detr'], default='yolov11',
+                        help='2D object detector models: "yolov11" or "detr"')
+    parser.add_argument('--depth', type=str, choices=['depthanything', 'opencvsgbm', 'transformer'],
+                        default='depthanything',
+                        help='Depth model: "depthanything", "opencvsgbm", "transformer"')
+    parser.add_argument('--data', type=str, default='',
                         help='Path to your dataset (required if camera=stereo)')
     return parser.parse_args()
 
@@ -36,7 +37,7 @@ def main():
     print("Initializing models...")
 
     # Initialize 2D object detector models
-    if args.detector == 'YOLOv11':
+    if args.detector == 'yolov11':
         detector = YOLOv11Detector(
             model_size="nano",
             conf_thres=conf_threshold,
@@ -44,19 +45,20 @@ def main():
             classes=classes,
             device=device
         )
+    elif args.detector == 'detr':
+        detector = DETRDetector(device=device)
     else:
-        detector = DETRDetector(
-            device=device
-        )
-    
-    # Initialize depth estimator models
-    if args.camera == 'single':
-        depth_estimator = DepthAnythingEstimator(
-            model_size="small",
-            device=device
-        )
-    else:
+        raise ValueError("Unsupported detection model")
+
+    # Initialize depth estimator
+    if args.depth == 'depthanything':
+        depth_estimator = DepthAnythingEstimator(model_size="small", device=device)
+    elif args.depth == 'opencvsgbm':
         depth_estimator = OpenCVStereoEstimator()
+    elif args.depth == 'transformer':
+        depth_estimator = TrainedStereoTransformer(weights_path="transformer_depth_kitti.pth", device=device)
+    else:
+        raise ValueError("Unsupported depth model")
     
     # Initialize 3D bounding box estimator models
     bbox3d_estimator = BBox3DEstimator()
@@ -68,14 +70,14 @@ def main():
         height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
         fps = int(cap.get(cv2.CAP_PROP_FPS))
         if fps == 0:  fps = 30
-        right_frame = None  # placeholder
-    else:
-        if not args.data_path:
+        right_frame = None 
+    elif args.camera == 'stereo':
+        if not args.data:
             print("Error: --kitti_path must be specified for stereo mode")
             return
 
-        left_dir = os.path.join(args.data_path, 'left_image')
-        right_dir = os.path.join(args.data_path, 'right_image')
+        left_dir = os.path.join(args.data, 'image_2')
+        right_dir = os.path.join(args.data, 'image_3')
 
         left_files = sorted([os.path.join(left_dir, f) for f in os.listdir(left_dir) if f.endswith(".png")])
         right_files = sorted([os.path.join(right_dir, f) for f in os.listdir(right_dir) if f.endswith(".png")])
@@ -89,16 +91,16 @@ def main():
         fps = 10 
         left_sample = cv2.imread(left_files[0])
         height, width = left_sample.shape[:2]
-        cap = None 
+        cap = None
+    else:
+        raise ValueError("Unsupported camera type")
 
     fourcc = cv2.VideoWriter_fourcc(*'mp4v')
     out = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
     
     print("Starting processing...")
     
-    # Main loop
     while True:  
-        # Check for key press again at the end of the loop
         key = cv2.waitKey(1)
         if key == ord('q') or key == 27 or (key & 0xFF) == ord('q') or (key & 0xFF) == 27:
             print("Exiting program...")
@@ -108,14 +110,15 @@ def main():
             ret, frame = cap.read()
             if not ret:
                 break
-        else:
+        elif args.camera == 'stereo':
             if stereo_index >= total_frames:
                 break
             frame = cv2.imread(left_files[stereo_index])
             right_frame = cv2.imread(right_files[stereo_index])
             stereo_index += 1
+        else:
+            raise ValueError("Unsupported camera type")
         
-        # Make copies for different visualizations
         detection_frame = frame.copy()
         result_frame = frame.copy()
         
@@ -126,10 +129,16 @@ def main():
         if args.camera == 'single':
             original_frame = frame.copy()
             depth_map = depth_estimator.estimate_depth(original_frame)
-        else:
+        elif args.camera == 'stereo':
             original_left_frame = frame.copy()
             original_right_frame = right_frame.copy()
-            depth_map = depth_estimator.estimate_depth(original_left_frame, original_right_frame)
+            if args.depth == 'depthanything':
+                depth_map = depth_estimator.estimate_depth(original_left_frame)
+            else:
+                depth_map = depth_estimator.estimate_depth(original_left_frame, original_right_frame)
+        else:
+            raise ValueError("Unsupported camera type")
+
         depth_colored = depth_estimator.colorize_depth(depth_map)
     
         # Step 3: 3D Bounding Box Estimation
@@ -139,23 +148,17 @@ def main():
         for detection in detections:
             bbox, score, class_id, obj_id = detection
             
-            # Get class name
             class_name = detector.get_class_names()[class_id]
             
-            # Get depth in the region of the bounding box
-            # Try different methods for depth estimation
             if class_name.lower() in ['person', 'cat', 'dog']:
-                # For people and animals, use the center point depth
                 center_x = int((bbox[0] + bbox[2]) / 2)
                 center_y = int((bbox[1] + bbox[3]) / 2)
                 depth_value = depth_estimator.get_depth_at_point(depth_map, center_x, center_y)
                 depth_method = 'center'
             else:
-                # For other objects, use the median depth in the region
                 depth_value = depth_estimator.get_depth_in_region(depth_map, bbox, method='median')
                 depth_method = 'median'
             
-            # Create a simplified 3D box representation
             box_3d = {
                 'bbox_2d': bbox,
                 'depth_value': depth_value,
@@ -167,41 +170,33 @@ def main():
             
             boxes_3d.append(box_3d)
             
-            # Keep track of active IDs for tracker cleanup
             if obj_id is not None:
                 active_ids.append(obj_id)
         
-        # Clean up trackers for objects that are no longer detected
         bbox3d_estimator.cleanup_trackers(active_ids)
         
         # Step 4: Visualization
-        # Draw boxes on the result frame
         for box_3d in boxes_3d:
-            # Determine color based on class
             class_name = box_3d['class_name'].lower()
             if 'car' in class_name or 'vehicle' in class_name:
-                color = (0, 0, 255)  # Red
+                color = (0, 0, 255) 
             elif 'person' in class_name:
-                color = (0, 255, 0)  # Green
+                color = (0, 255, 0)  
             elif 'bicycle' in class_name or 'motorcycle' in class_name:
-                color = (255, 0, 0)  # Blue
+                color = (255, 0, 0) 
             elif 'potted plant' in class_name or 'plant' in class_name:
-                color = (0, 255, 255)  # Yellow
+                color = (0, 255, 255)  
             else:
-                color = (255, 255, 255)  # White
+                color = (255, 255, 255) 
             
-            # Draw box with depth information
             result_frame = bbox3d_estimator.draw_box_3d(result_frame, box_3d, color=color)
             
-        # Write frame to output video
         out.write(result_frame)
         
-        # Display frames
         cv2.imshow("3D Object Detection", result_frame)
         cv2.imshow("Depth Map", depth_colored)
         cv2.imshow("Object Detection", detection_frame)
     
-    # Clean up
     print("Cleaning up resources...")
     cap.release()
     out.release()
